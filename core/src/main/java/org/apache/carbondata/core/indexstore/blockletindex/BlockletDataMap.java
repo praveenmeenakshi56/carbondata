@@ -461,8 +461,7 @@ public class BlockletDataMap implements DataMap, Cacheable {
     return false;
   }
 
-  @Override
-  public List<Blocklet> prune(FilterResolverIntf filterExp) {
+  private List<Blocklet> prune(FilterResolverIntf filterExp, SegmentProperties segmentProperties) {
 
     // getting the start and end index key based on filter for hitting the
     // selected block reference nodes based on filter resolver tree.
@@ -528,7 +527,9 @@ public class BlockletDataMap implements DataMap, Cacheable {
     return blocklets;
   }
 
-  @Override public List<Blocklet> prune(FilterResolverIntf filterExp, List<String> partitions) {
+  @Override
+  public List<Blocklet> prune(FilterResolverIntf filterExp, SegmentProperties segmentProperties,
+      List<String> partitions) {
     // First get the partitions which are stored inside datamap.
     List<String> storedPartitions = getPartitions();
     // if it has partitioned datamap but there is no partitioned information stored, it means
@@ -547,7 +548,7 @@ public class BlockletDataMap implements DataMap, Cacheable {
       }
     }
     // Prune with filters if the partitions are existed in this datamap
-    return prune(filterExp);
+    return prune(filterExp, segmentProperties);
   }
 
   /**
