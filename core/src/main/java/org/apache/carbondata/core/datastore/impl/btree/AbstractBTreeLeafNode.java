@@ -24,6 +24,7 @@ import org.apache.carbondata.core.datastore.FileHolder;
 import org.apache.carbondata.core.datastore.IndexKey;
 import org.apache.carbondata.core.datastore.chunk.impl.DimensionRawColumnChunk;
 import org.apache.carbondata.core.datastore.chunk.impl.MeasureRawColumnChunk;
+import org.apache.carbondata.core.util.BitSetGroup;
 
 /**
  * Non leaf node abstract class
@@ -243,5 +244,9 @@ public abstract class AbstractBTreeLeafNode implements BTreeNode {
   @Override
   public int getPageRowCount(int pageNumber) {
     throw new UnsupportedOperationException("Unsupported operation");
+  }
+
+  @Override public BitSetGroup getIndexedData() {
+    return null;
   }
 }

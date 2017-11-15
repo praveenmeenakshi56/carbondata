@@ -738,6 +738,7 @@ class TestStreamingTableOperation extends QueryTest with BeforeAndAfterAll {
       handoffSize = 1024L * 200
     )
     sql("alter table streaming.stream_table_finish finish streaming")
+    Thread.sleep(1000)
     sql("show segments for table streaming.stream_table_finish").show(100, false)
 
     val segments = sql("show segments for table streaming.stream_table_finish").collect()
@@ -850,8 +851,9 @@ class TestStreamingTableOperation extends QueryTest with BeforeAndAfterAll {
             .start()
           qry.awaitTermination()
         } catch {
-          case ex =>
-            throw new Exception(ex.getMessage)
+          case ex: Throwable =>
+            LOGGER.error(ex.getMessage)
+            throw new Exception(ex.getMessage, ex)
         } finally {
           if (null != qry) {
             qry.stop()
