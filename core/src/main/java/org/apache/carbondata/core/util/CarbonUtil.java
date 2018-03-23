@@ -2428,31 +2428,33 @@ public final class CarbonUtil {
     }
   }
 
-  public static boolean validateRangeOfSegmentList(String segmentId)
-      throws InvalidConfigurationException {
-    String[] values = segmentId.split(",");
-    try {
-      if (values.length == 0) {
-        throw new InvalidConfigurationException(
-            "carbon.input.segments.<database_name>.<table_name> value can't be empty.");
-      }
-      for (String value : values) {
-        if (!value.equalsIgnoreCase("*")) {
-          Segment segment = Segment.toSegment(value);
-          Float aFloatValue = Float.parseFloat(segment.getSegmentNo());
-          if (aFloatValue < 0 || aFloatValue > Float.MAX_VALUE) {
+    public static boolean validateRangeOfSegmentList(String segmentId)
+            throws InvalidConfigurationException {
+        String[] values = segmentId.split(",");
+        try {
+            if (values.length == 0) {
+                throw new InvalidConfigurationException(
+                        "carbon.input.segments.<database_name>.<table_name> value can't be empty.");
+            }
+            int startIndex =
+                    values[0].equals(CarbonCommonConstants.PREAGGQUERY_SEGMENTS_CONSTANTS) ? 1 : 0;
+            for (int i = startIndex; i < values.length; i++) {
+                if (!values[i].equalsIgnoreCase("*")) {
+                    Segment segment = Segment.toSegment(values[i]);
+                    Float aFloatValue = Float.parseFloat(segment.getSegmentNo());
+                    if (aFloatValue < 0 || aFloatValue > Float.MAX_VALUE) {
+                        throw new InvalidConfigurationException(
+                                "carbon.input.segments.<database_name>.<table_name> value range should be greater "
+                                        + "than 0 and less than " + Float.MAX_VALUE);
+                    }
+                }
+            }
+        } catch (NumberFormatException nfe) {
             throw new InvalidConfigurationException(
-                "carbon.input.segments.<database_name>.<table_name> value range should be greater "
-                    + "than 0 and less than " + Float.MAX_VALUE);
-          }
+                    "carbon.input.segments.<database_name>.<table_name> value range is not valid");
         }
-      }
-    } catch (NumberFormatException nfe) {
-      throw new InvalidConfigurationException(
-          "carbon.input.segments.<database_name>.<table_name> value range is not valid");
+        return true;
     }
-    return true;
-  }
   /**
    * Below method will be used to check whether bitset applied on previous filter
    * can be used to apply on next column filter

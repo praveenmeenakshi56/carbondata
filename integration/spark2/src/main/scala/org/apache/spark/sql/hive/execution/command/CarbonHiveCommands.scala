@@ -97,6 +97,8 @@ object CarbonSetCommand {
       }
     } else if (key.startsWith(CarbonCommonConstants.VALIDATE_CARBON_INPUT_SEGMENTS)) {
       sessionParams.addProperty(key.toLowerCase(), value)
+    } else if (key.startsWith(CarbonCommonConstants.CARBON_STREAMING_SEGMENT)) {
+      sessionParams.addProperty(key.toLowerCase(), value)
     }
   }
 

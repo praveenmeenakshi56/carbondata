@@ -203,6 +203,8 @@ public class SessionParams implements Serializable {
           isValid = true;
         } else if (key.equalsIgnoreCase(CarbonCommonConstants.SUPPORT_DIRECT_QUERY_ON_DATAMAP)) {
           isValid = true;
+        } else if (key.startsWith(CarbonCommonConstants.CARBON_STREAMING_SEGMENT)) {
+          isValid = true;
         } else {
           throw new InvalidConfigurationException(
               "The key " + key + " not supported for dynamic configuration.");

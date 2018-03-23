@@ -137,6 +137,7 @@ case class CarbonAlterTableCompactionCommand(
             CarbonException.analysisException(
               s"Compaction failed. Please check logs for more info. ${ e.getMessage }")
           } else {
+            throw e
             CarbonException.analysisException(
               "Exception in compaction. Please check logs for more info.")
           }

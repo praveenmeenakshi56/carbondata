@@ -1471,6 +1471,10 @@ public final class CarbonCommonConstants {
   public static final String HANDOFF_SIZE = "carbon.streaming.segment.max.size";
 
   /**
+   *  If set to true then CarbonTableInputFormat will give row based streaming splits.
+   */
+  public static final String CARBON_STREAMING_SEGMENT = "carbon.streaming.segment";
+  /**
    * enable auto handoff streaming segment
    */
   public static final String ENABLE_AUTO_HANDOFF = "carbon.streaming.auto.handoff.enabled";
@@ -1617,6 +1621,8 @@ public final class CarbonCommonConstants {
    * will remain at 100KB.
    */
   public static final String CARBON_INVISIBLE_SEGMENTS_PRESERVE_COUNT_DEFAULT = "200";
+
+  public static final String PREAGGQUERY_SEGMENTS_CONSTANTS = "streaming_seg";
 
   private CarbonCommonConstants() {
   }

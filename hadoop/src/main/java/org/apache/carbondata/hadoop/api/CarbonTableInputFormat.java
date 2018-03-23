@@ -33,6 +33,7 @@ import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.datamap.TableDataMap;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
+import org.apache.carbondata.core.exception.InvalidConfigurationException;
 import org.apache.carbondata.core.indexstore.ExtendedBlocklet;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
@@ -55,7 +56,7 @@ import org.apache.carbondata.core.statusmanager.FileFormat;
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
 import org.apache.carbondata.core.statusmanager.SegmentUpdateStatusManager;
-import org.apache.carbondata.core.util.CarbonUtil;
+import org.apache.carbondata.core.util.*;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
 import org.apache.carbondata.format.BlockIndex;
 import org.apache.carbondata.hadoop.CarbonInputSplit;
@@ -70,6 +71,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.FileSplit;
 
 /**
@@ -116,6 +118,9 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
     }
   }
 
+  public static void setTablePath(Configuration configuration, String tablePath) {
+    configuration.set(FileInputFormat.INPUT_DIR, tablePath);
+  }
   /**
    * {@inheritDoc}
    * Configurations FileInputFormat.INPUT_DIR
@@ -143,15 +148,21 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
     SegmentStatusManager segmentStatusManager = new SegmentStatusManager(identifier);
     SegmentStatusManager.ValidAndInvalidSegmentsInfo segments =
         segmentStatusManager.getValidAndInvalidSegments(loadMetadataDetails);
-
-    if (getValidateSegmentsToAccess(job.getConfiguration())) {
+    boolean accessStreamingSegments = false;
+    try {
+        accessStreamingSegments = getAccessStreamingSegments(job.getConfiguration());
+    }catch (InvalidConfigurationException e ) {
+        accessStreamingSegments = false;
+    }
+    if (accessStreamingSegments) {
+      return getSplitsOfStreaming(job, identifier, segments.getStreamSegments());
+    } else if (getValidateSegmentsToAccess(job.getConfiguration())) {
       List<Segment> validSegments = segments.getValidSegments();
       streamSegments = segments.getStreamSegments();
       streamSegments = getFilteredSegment(job,streamSegments);
       if (validSegments.size() == 0) {
         return getSplitsOfStreaming(job, identifier, streamSegments);
       }
-
       List<Segment> filteredSegmentToAccess = getFilteredSegment(job, segments.getValidSegments());
       if (filteredSegmentToAccess.size() == 0) {
         return getSplitsOfStreaming(job, identifier, streamSegments);

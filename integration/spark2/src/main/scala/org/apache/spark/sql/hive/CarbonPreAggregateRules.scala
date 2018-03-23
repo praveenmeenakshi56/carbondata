@@ -650,6 +650,21 @@ case class CarbonPreAggregateQueryRules(sparkSession: SparkSession) extends Rule
    * child datamap schema
    */
   def setSegmentsForStreaming(parentTable: CarbonTable, dataMapSchema: DataMapSchema): Unit = {
+    // setting for maintable
+    CarbonSession.threadSet(
+      CarbonCommonConstants.CARBON_INPUT_SEGMENTS +
+      parentTable.getDatabaseName + "." +
+      parentTable.getTableName,
+      CarbonCommonConstants.PREAGGQUERY_SEGMENTS_CONSTANTS)
+    CarbonSession.threadSet(
+      CarbonCommonConstants.VALIDATE_CARBON_INPUT_SEGMENTS +
+      parentTable.getDatabaseName + "." +
+      parentTable.getTableName,
+      "false")
+    CarbonSession.threadSet(CarbonCommonConstants.CARBON_STREAMING_SEGMENT + "."  +
+      parentTable.getDatabaseName + "." +
+      parentTable.getTableName,"true")
+    CarbonSession.updateSessionInfoToCurrentThread(sparkSession)
     // below code is for aggregate table
     val identifier = TableIdentifier(
       dataMapSchema.getChildSchema.getTableName,
@@ -670,7 +685,10 @@ case class CarbonPreAggregateQueryRules(sparkSession: SparkSession) extends Rule
       CarbonCommonConstants.VALIDATE_CARBON_INPUT_SEGMENTS +
       carbonRelation.carbonTable.getDatabaseName + "." +
       carbonRelation.carbonTable.getTableName,
-      "false")
+      "true")
+    CarbonSession.threadSet(CarbonCommonConstants.CARBON_STREAMING_SEGMENT + "."  +
+      carbonRelation.carbonTable.getDatabaseName + "." +
+      carbonRelation.carbonTable.getTableName,"false")
     CarbonSession.updateSessionInfoToCurrentThread(sparkSession)
   }
 
