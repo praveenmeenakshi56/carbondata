@@ -336,7 +336,6 @@ class CarbonScanRDD(
         }
       }
 
-
       noOfBlocks = splits.size
       noOfTasks = result.size()
 
@@ -556,40 +555,32 @@ class CarbonScanRDD(
       CarbonCommonConstants.USE_DISTRIBUTED_DATAMAP_DEFAULT).toBoolean) {
       CarbonInputFormat.setDataMapJob(conf, new SparkDataMapJob)
     }
-
     // when validate segments is disabled in thread local update it to CarbonTableInputFormat
     val carbonSessionInfo = ThreadLocalSessionInfo.getCarbonSessionInfo
     if (carbonSessionInfo != null) {
-      CarbonInputFormat.setAccessStreamingSegments(conf, carbonSessionInfo.getSessionParams
-        .getProperty(CarbonCommonConstants.CARBON_STREAMING_SEGMENT + "." + identifier.getDatabaseName + "." + identifier.getTableName , "false").toBoolean)
-      CarbonInputFormat.setValidateSegmentsToAccess(conf, carbonSessionInfo.getSessionParams
-        .getProperty(CarbonCommonConstants.VALIDATE_CARBON_INPUT_SEGMENTS +
-                     identifier.getCarbonTableIdentifier.getDatabaseName + "." +
-                     identifier.getCarbonTableIdentifier.getTableName, "true").toBoolean)
       val tableUniqueKey = identifier.getDatabaseName + "." + identifier.getTableName
+      val validateInputSegmentsKey = CarbonCommonConstants.VALIDATE_CARBON_INPUT_SEGMENTS +
+        tableUniqueKey
+      val accessStreamingSegKey = CarbonCommonConstants.CARBON_STREAMING_SEGMENT + tableUniqueKey
       val inputSegmentsKey = CarbonCommonConstants.CARBON_INPUT_SEGMENTS + tableUniqueKey
-      val validateInputSegments = CarbonCommonConstants.VALIDATE_CARBON_INPUT_SEGMENTS +
-                                  tableUniqueKey
-      // checking if call is for streaming pre aggregate table
+      val isOnlyStreamingSeg = carbonSessionInfo.getSessionParams
+        .getProperty(accessStreamingSegKey, "false").toBoolean
+      CarbonInputFormat.setAccessStreamingSegments(conf, isOnlyStreamingSeg)
+      CarbonInputFormat.setValidateSegmentsToAccess(conf, carbonSessionInfo.getSessionParams
+        .getProperty(validateInputSegmentsKey, "true").toBoolean)
+      // removing access only streaming property as it is already set to input fromat
+      carbonSessionInfo.getSessionParams.removeProperty(accessStreamingSegKey)
+      carbonSessionInfo.getThreadParams.removeProperty(accessStreamingSegKey)
+      // when query plan to hit pre aggregate table with streaming in that case there will be
+      // one key added to differentiate so it can be removed from thread params and session params
+      // below code is handle the same
       val segments = ThreadLocalSessionInfo.getCarbonSessionInfo.getSessionParams
         .getProperty(inputSegmentsKey, "*")
-      // if segments starts with streaming then it is set from CarbonPreAggregateQueryRules
-      // in that can we must remove from session info object(session params and thread params)
-      if (segments.startsWith(CarbonCommonConstants.PREAGGQUERY_SEGMENTS_CONSTANTS)) {
-        // removing from session params
-        ThreadLocalSessionInfo.getCarbonSessionInfo.getSessionParams
-          .removeProperty(inputSegmentsKey)
-        // removing from thread params
-        ThreadLocalSessionInfo.getCarbonSessionInfo.getThreadParams
-          .removeProperty(inputSegmentsKey)
-        // removing from session params
-        ThreadLocalSessionInfo.getCarbonSessionInfo.getSessionParams
-          .removeProperty(validateInputSegments)
-        // removing from thread params
-        ThreadLocalSessionInfo.getCarbonSessionInfo.getThreadParams
-          .removeProperty(validateInputSegments)
-        carbonSessionInfo.getSessionParams.removeProperty(CarbonCommonConstants.CARBON_STREAMING_SEGMENT + "." + identifier.getCarbonTableIdentifier.getDatabaseName + "." + identifier.getCarbonTableIdentifier.getTableName)
-        carbonSessionInfo.getThreadParams.removeProperty(CarbonCommonConstants.CARBON_STREAMING_SEGMENT + "." + identifier.getCarbonTableIdentifier.getDatabaseName + "." + identifier.getCarbonTableIdentifier.getTableName)
+      if(segments.startsWith(CarbonCommonConstants.PREAGGQUERY_SEGMENTS_CONSTANTS)) {
+        carbonSessionInfo.getSessionParams.removeProperty(inputSegmentsKey)
+        carbonSessionInfo.getThreadParams.removeProperty(inputSegmentsKey)
+        carbonSessionInfo.getSessionParams.removeProperty(validateInputSegmentsKey)
+        carbonSessionInfo.getThreadParams.removeProperty(validateInputSegmentsKey)
       }
     }
     format

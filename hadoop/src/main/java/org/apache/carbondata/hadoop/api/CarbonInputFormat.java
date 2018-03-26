@@ -545,4 +545,22 @@ public abstract class CarbonInputFormat<T> extends FileInputFormat<Void, T> {
     }
     return tableName;
   }
+
+  public static void setAccessStreamingSegments(Configuration configuration, Boolean validate)
+          throws InvalidConfigurationException {
+    configuration.set(
+            CarbonCommonConstants.CARBON_STREAMING_SEGMENT + "." + getDatabaseName(configuration) + "."
+                    + getTableName(configuration), validate.toString());
+  }
+
+  public static boolean getAccessStreamingSegments(Configuration configuration) {
+    try {
+      return configuration.get(
+              CarbonCommonConstants.CARBON_STREAMING_SEGMENT + "." + getDatabaseName(configuration)
+                      + "." + getTableName(configuration), "false").equalsIgnoreCase("true");
+
+    } catch (InvalidConfigurationException e) {
+      return false;
+    }
+  }
 }

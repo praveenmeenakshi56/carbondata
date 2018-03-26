@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
@@ -50,9 +51,11 @@ public class Segment implements Serializable {
   }
 
   public static List<Segment> toSegmentList(String[] segmentIds) {
+    int startIndex =
+            segmentIds[0].equals(CarbonCommonConstants.PREAGGQUERY_SEGMENTS_CONSTANTS) ? 1 : 0;
     List<Segment> list = new ArrayList<>(segmentIds.length);
-    for (String segmentId : segmentIds) {
-      list.add(toSegment(segmentId));
+    for (int i = startIndex; i < segmentIds.length; i++) {
+      list.add(toSegment(segmentIds[i]));
     }
     return list;
   }

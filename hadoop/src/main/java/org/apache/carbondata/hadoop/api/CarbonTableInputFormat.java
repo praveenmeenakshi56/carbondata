@@ -33,7 +33,6 @@ import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.datamap.TableDataMap;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
-import org.apache.carbondata.core.exception.InvalidConfigurationException;
 import org.apache.carbondata.core.indexstore.ExtendedBlocklet;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
@@ -71,7 +70,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.FileSplit;
 
 /**
@@ -118,98 +116,93 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
     }
   }
 
-  public static void setTablePath(Configuration configuration, String tablePath) {
-    configuration.set(FileInputFormat.INPUT_DIR, tablePath);
-  }
-  /**
-   * {@inheritDoc}
-   * Configurations FileInputFormat.INPUT_DIR
-   * are used to get table path to read.
-   *
-   * @param job
-   * @return List<InputSplit> list of CarbonInputSplit
-   * @throws IOException
-   */
-  @Override
-  public List<InputSplit> getSplits(JobContext job) throws IOException {
-    AbsoluteTableIdentifier identifier = getAbsoluteTableIdentifier(job.getConfiguration());
-    LoadMetadataDetails[] loadMetadataDetails = SegmentStatusManager
-        .readTableStatusFile(CarbonTablePath.getTableStatusFilePath(identifier.getTablePath()));
-    SegmentUpdateStatusManager updateStatusManager =
-        new SegmentUpdateStatusManager(identifier, loadMetadataDetails);
-    CarbonTable carbonTable = getOrCreateCarbonTable(job.getConfiguration());
-    if (null == carbonTable) {
-      throw new IOException("Missing/Corrupt schema file for table.");
-    }
-    List<Segment> invalidSegments = new ArrayList<>();
-    List<UpdateVO> invalidTimestampsList = new ArrayList<>();
-    List<Segment> streamSegments = null;
-    // get all valid segments and set them into the configuration
-    SegmentStatusManager segmentStatusManager = new SegmentStatusManager(identifier);
-    SegmentStatusManager.ValidAndInvalidSegmentsInfo segments =
-        segmentStatusManager.getValidAndInvalidSegments(loadMetadataDetails);
-    boolean accessStreamingSegments = false;
-    try {
-        accessStreamingSegments = getAccessStreamingSegments(job.getConfiguration());
-    }catch (InvalidConfigurationException e ) {
-        accessStreamingSegments = false;
-    }
-    if (accessStreamingSegments) {
-      return getSplitsOfStreaming(job, identifier, segments.getStreamSegments());
-    } else if (getValidateSegmentsToAccess(job.getConfiguration())) {
-      List<Segment> validSegments = segments.getValidSegments();
-      streamSegments = segments.getStreamSegments();
-      streamSegments = getFilteredSegment(job,streamSegments);
-      if (validSegments.size() == 0) {
-        return getSplitsOfStreaming(job, identifier, streamSegments);
-      }
-      List<Segment> filteredSegmentToAccess = getFilteredSegment(job, segments.getValidSegments());
-      if (filteredSegmentToAccess.size() == 0) {
-        return getSplitsOfStreaming(job, identifier, streamSegments);
-      } else {
-        setSegmentsToAccess(job.getConfiguration(), filteredSegmentToAccess);
-      }
-      // remove entry in the segment index if there are invalid segments
-      invalidSegments.addAll(segments.getInvalidSegments());
-      for (Segment invalidSegmentId : invalidSegments) {
-        invalidTimestampsList
-            .add(updateStatusManager.getInvalidTimestampRange(invalidSegmentId.getSegmentNo()));
-      }
-      if (invalidSegments.size() > 0) {
-        DataMapStoreManager.getInstance()
-            .clearInvalidSegments(getOrCreateCarbonTable(job.getConfiguration()), invalidSegments);
-      }
-    }
-    ArrayList<Segment> validAndInProgressSegments = new ArrayList<>(segments.getValidSegments());
-    // Add in progress segments also to filter it as in case of aggregate table load it loads
-    // data from in progress table.
-    validAndInProgressSegments.addAll(segments.getListOfInProgressSegments());
-    // get updated filtered list
-    List<Segment> filteredSegmentToAccess =
-        getFilteredSegment(job, new ArrayList<>(validAndInProgressSegments));
-    // Clean the updated segments from memory if the update happens on segments
-    List<Segment> toBeCleanedSegments = new ArrayList<>();
-    for (SegmentUpdateDetails segmentUpdateDetail : updateStatusManager
-        .getUpdateStatusDetails()) {
-      boolean refreshNeeded =
-          DataMapStoreManager.getInstance().getTableSegmentRefresher(identifier)
-              .isRefreshNeeded(segmentUpdateDetail.getSegmentName(), updateStatusManager);
-      if (refreshNeeded) {
-        toBeCleanedSegments.add(new Segment(segmentUpdateDetail.getSegmentName(), null));
-      }
-    }
-    // Clean segments if refresh is needed
-    for (Segment segment : filteredSegmentToAccess) {
-      if (DataMapStoreManager.getInstance().getTableSegmentRefresher(identifier)
-          .isRefreshNeeded(segment.getSegmentNo())) {
-        toBeCleanedSegments.add(segment);
-      }
-    }
-    if (toBeCleanedSegments.size() > 0) {
-      DataMapStoreManager.getInstance()
-          .clearInvalidSegments(getOrCreateCarbonTable(job.getConfiguration()),
-              toBeCleanedSegments);
-    }
+    /**
+     * {@inheritDoc}
+     * Configurations FileInputFormat.INPUT_DIR
+     * are used to get table path to read.
+     *
+     * @param job
+     * @return List<InputSplit> list of CarbonInputSplit
+     * @throws IOException
+     */
+    @Override
+    public List<InputSplit> getSplits(JobContext job) throws IOException {
+        AbsoluteTableIdentifier identifier = getAbsoluteTableIdentifier(job.getConfiguration());
+        LoadMetadataDetails[] loadMetadataDetails = SegmentStatusManager
+                .readTableStatusFile(CarbonTablePath.getTableStatusFilePath(identifier.getTablePath()));
+        SegmentUpdateStatusManager updateStatusManager =
+                new SegmentUpdateStatusManager(identifier, loadMetadataDetails);
+        CarbonTable carbonTable = getOrCreateCarbonTable(job.getConfiguration());
+        if (null == carbonTable) {
+            throw new IOException("Missing/Corrupt schema file for table.");
+        }
+        List<Segment> invalidSegments = new ArrayList<>();
+        List<UpdateVO> invalidTimestampsList = new ArrayList<>();
+        List<Segment> streamSegments = null;
+        // get all valid segments and set them into the configuration
+        SegmentStatusManager segmentStatusManager = new SegmentStatusManager(identifier);
+        SegmentStatusManager.ValidAndInvalidSegmentsInfo segments =
+                segmentStatusManager.getValidAndInvalidSegments(loadMetadataDetails);
+        // if for streaming table only access is streaming table is enabled access then access
+        // only streaming segments this will be
+        boolean accessStreamingSegments = getAccessStreamingSegments(job.getConfiguration());
+        if (accessStreamingSegments) {
+            return getSplitsOfStreaming(job, identifier, segments.getStreamSegments());
+        } else if (getValidateSegmentsToAccess(job.getConfiguration())) {
+            List<Segment> validSegments = segments.getValidSegments();
+            streamSegments = segments.getStreamSegments();
+            streamSegments = getFilteredSegment(job, streamSegments);
+            if (validSegments.size() == 0) {
+                return getSplitsOfStreaming(job, identifier, streamSegments);
+            }
+
+            List<Segment> filteredSegmentToAccess = getFilteredSegment(job, segments.getValidSegments());
+            if (filteredSegmentToAccess.size() == 0) {
+                return getSplitsOfStreaming(job, identifier, streamSegments);
+            } else {
+                setSegmentsToAccess(job.getConfiguration(), filteredSegmentToAccess);
+            }
+            // remove entry in the segment index if there are invalid segments
+            invalidSegments.addAll(segments.getInvalidSegments());
+            for (Segment invalidSegmentId : invalidSegments) {
+                invalidTimestampsList
+                        .add(updateStatusManager.getInvalidTimestampRange(invalidSegmentId.getSegmentNo()));
+            }
+            if (invalidSegments.size() > 0) {
+                DataMapStoreManager.getInstance()
+                        .clearInvalidSegments(getOrCreateCarbonTable(job.getConfiguration()), invalidSegments);
+            }
+        }
+        List<Segment> validAndInProgressSegments = new ArrayList<>(segments.getValidSegments());
+        // Add in progress segments also to filter it as in case of aggregate table load it loads
+        // data from in progress table.
+        validAndInProgressSegments.addAll(segments.getListOfInProgressSegments());
+        // get updated filtered list
+        List<Segment> filteredSegmentToAccess =
+                getFilteredSegment(job, new ArrayList<>(validAndInProgressSegments));
+        // Clean the updated segments from memory if the update happens on segments
+        List<Segment> toBeCleanedSegments = new ArrayList<>();
+        for (SegmentUpdateDetails segmentUpdateDetail : updateStatusManager
+                .getUpdateStatusDetails()) {
+            boolean refreshNeeded =
+                    DataMapStoreManager.getInstance().getTableSegmentRefresher(identifier)
+                            .isRefreshNeeded(segmentUpdateDetail.getSegmentName(), updateStatusManager);
+            if (refreshNeeded) {
+                toBeCleanedSegments.add(new Segment(segmentUpdateDetail.getSegmentName(), null));
+            }
+        }
+        // Clean segments if refresh is needed
+        for (Segment segment : filteredSegmentToAccess) {
+            if (DataMapStoreManager.getInstance().getTableSegmentRefresher(identifier)
+                    .isRefreshNeeded(segment.getSegmentNo())) {
+                toBeCleanedSegments.add(segment);
+            }
+        }
+        if (toBeCleanedSegments.size() > 0) {
+            DataMapStoreManager.getInstance()
+                    .clearInvalidSegments(getOrCreateCarbonTable(job.getConfiguration()),
+                            toBeCleanedSegments);
+        }
 
     // process and resolve the expression
     Expression filter = getFilterPredicates(job.getConfiguration());
