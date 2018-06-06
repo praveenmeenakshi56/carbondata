@@ -44,7 +44,7 @@ import org.apache.carbondata.core.keygenerator.directdictionary.DirectDictionary
 import org.apache.carbondata.core.metadata.ColumnIdentifier
 import org.apache.carbondata.core.metadata.datatype.{DataType => CarbonDataType, DataTypes => CarbonDataTypes, StructField => CarbonStructField}
 import org.apache.carbondata.core.metadata.encoder.Encoding
-import org.apache.carbondata.core.metadata.schema.table.{CarbonTable, DataMapSchema, DataMapSchemaStorageProvider}
+import org.apache.carbondata.core.metadata.schema.table.{CarbonTable, DataMapSchema}
 import org.apache.carbondata.core.metadata.schema.table.column.{CarbonColumn, ColumnSchema}
 import org.apache.carbondata.core.util.DataTypeUtil
 import org.apache.carbondata.processing.exception.DataLoadingException
@@ -611,5 +611,37 @@ object CarbonScalaUtil {
       table,
       sparkSession,
       schema)._1.asInstanceOf[Object]
+  }
+
+  /**
+   * this method parses the string to boolean, if parsing successful then it returs true, else
+   * returns false
+   * @param input
+   * @return
+   */
+  def castStringToBoolean(input: String): Boolean = {
+    try {
+      input.trim.toBoolean
+      true
+    } catch {
+      case e: IllegalArgumentException =>
+        false
+    }
+  }
+
+  /**
+   * this method converts the string to int, if parsing successful then it returs true, else
+   * returns false
+   * @param input
+   * @return
+   */
+  def castStringToInt(input: String): Boolean = {
+    try {
+      input.trim.toInt
+      true
+    } catch {
+      case e: NumberFormatException =>
+        false
+    }
   }
 }

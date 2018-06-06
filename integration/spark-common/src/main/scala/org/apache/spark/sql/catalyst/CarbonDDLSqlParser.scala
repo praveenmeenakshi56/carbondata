@@ -43,7 +43,7 @@ import org.apache.carbondata.core.metadata.schema.partition.PartitionType
 import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema
 import org.apache.carbondata.core.util.{CarbonProperties, CarbonUtil}
 import org.apache.carbondata.processing.util.CarbonLoaderUtil
-import org.apache.carbondata.spark.util.{CommonUtil, DataTypeConverterUtil}
+import org.apache.carbondata.spark.util.{CarbonScalaUtil, CommonUtil, DataTypeConverterUtil}
 
 /**
  * TODO remove the duplicate code and add the common methods to common class.
@@ -292,6 +292,68 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
         s"${CarbonCommonConstants.COLUMN_GROUPS} is deprecated")
     }
 
+    // validate the local dictionary property if defined
+    if (tableProperties.get(CarbonCommonConstants.LOCAL_DICT_ENABLE).isDefined) {
+      // if any invalid value is configured for LOCAL_DICT_ENABLE, then default value will be
+      // considered which is true
+      if (!CarbonScalaUtil
+        .castStringToBoolean(tableProperties(CarbonCommonConstants.LOCAL_DICT_ENABLE))) {
+        tableProperties.put(CarbonCommonConstants.LOCAL_DICT_ENABLE,
+            CarbonCommonConstants.LOCAL_DICT_ENABLE_DEFAULT)
+      }
+      // validate the local dictionary threshold property if defined
+      if (tableProperties.get(CarbonCommonConstants.LOCAL_DICT_THRESHOLD).isDefined) {
+        // if any invalid value is configured for LOCAL_DICT_THRESHOLD, then default value will be
+        // considered which is 1000
+        if (!CarbonScalaUtil.castStringToInt(tableProperties(CarbonCommonConstants
+          .LOCAL_DICT_THRESHOLD))) {
+          tableProperties.put(CarbonCommonConstants.LOCAL_DICT_THRESHOLD,
+              CarbonCommonConstants.LOCALDICT_THRESHOLD_DEFAULT)
+        }
+      }
+    } else {
+      // if LOCAL_DICT_ENABLE is not defined, consider the default value which is true
+      tableProperties.put(CarbonCommonConstants.LOCAL_DICT_ENABLE,
+          CarbonCommonConstants.LOCAL_DICT_ENABLE_DEFAULT)
+    }
+
+    // validate the local dictionary columns defined, this we will validated if the local dictionary
+    // is enabled, else it is not validated
+    if (!(tableProperties.get(CarbonCommonConstants.LOCAL_DICT_ENABLE).isDefined &&
+          tableProperties(CarbonCommonConstants.LOCAL_DICT_ENABLE).trim
+            .equalsIgnoreCase("false"))) {
+      var localDictIncludeColumns: Seq[String] = Seq[String]()
+      var localDictExcludeColumns: Seq[String] = Seq[String]()
+      val isLocalDictIncludeDefined = tableProperties.get(CarbonCommonConstants.LOCAL_DICT_INCLUDE)
+        .isDefined
+      val isLocalDictExcludeDefined = tableProperties.get(CarbonCommonConstants.LOCAL_DICT_EXCLUDE)
+        .isDefined
+      if (isLocalDictIncludeDefined) {
+        localDictIncludeColumns =
+          tableProperties(CarbonCommonConstants.LOCAL_DICT_INCLUDE).split(",").map(_.trim)
+        // validate all the local dictionary include columns
+        validateLocalDictionaryColumns(fields, tableProperties, localDictIncludeColumns)
+      }
+      if (isLocalDictExcludeDefined) {
+        localDictExcludeColumns =
+          tableProperties(CarbonCommonConstants.LOCAL_DICT_EXCLUDE).split(",").map(_.trim)
+        // validate all the local dictionary exclude columns
+        validateLocalDictionaryColumns(fields, tableProperties, localDictExcludeColumns)
+      }
+      // validate if both local dictionary include and exclude contains same column
+      if (isLocalDictIncludeDefined && isLocalDictExcludeDefined) {
+        if (List(localDictIncludeColumns, localDictExcludeColumns).mkString(",").split(",")
+              .distinct.length !=
+            List(localDictIncludeColumns, localDictExcludeColumns).mkString(",").split(",")
+              .length) {
+          val errMsg =
+            "Column ambiguity as duplicate columns present in LOCAL_DICTIONARY_INCLUDE and " +
+            "LOCAL_DICTIONARY_INCLUDE.Duplicate columns are not allowed."
+          throw new MalformedCarbonCommandException(errMsg)
+        }
+      }
+    }
+
     // get no inverted index columns from table properties.
     val noInvertedIdxCols = extractNoInvertedIndexColumns(fields, tableProperties)
     // get partitionInfo
@@ -317,6 +379,91 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
       bucketFields: Option[BucketFields],
       partitionInfo,
       tableComment)
+  }
+
+  /**
+   * This method validates the local dictionary configured columns
+   * @param fields
+   * @param tableProperties
+   */
+  private def validateLocalDictionaryColumns(fields: Seq[Field],
+      tableProperties: Map[String, String], localDictColumns: Seq[String]): Unit = {
+    var dictIncludeColumns: Seq[String] = Seq[String]()
+
+      // check if the column specified exists in table schema
+      localDictColumns.foreach { distCol =>
+        if (!fields.exists(x => x.column.equalsIgnoreCase(distCol.trim))) {
+          val errormsg = "LOCAL_DICT_INCLUDE/LOCAL_DICT_EXCLUDE column: " + distCol.trim +
+                         " does not exist in table. Please check create table statement."
+          throw new MalformedCarbonCommandException(errormsg)
+        }
+      }
+
+      // check if column is other string datatype
+      localDictColumns.foreach { dictColm =>
+        if (fields
+          .exists(x => x.column.equalsIgnoreCase(dictColm) &&
+                       !x.dataType.get.equalsIgnoreCase("STRING"))) {
+          val errormsg = "LOCAL_DICT_INCLUDE/LOCAL_DICT_EXCLUDE column: " + dictColm.trim +
+                         " is not a String datatype column. LOCAL_DICT_COLUMN should be no " +
+                         "dictionary string datatype column.Please check create table statement."
+          throw new MalformedCarbonCommandException(errormsg)
+        }
+      }
+      // check if the same column is present in both dictionary include and local dictionary columns
+      // configuration
+      if (tableProperties.get(CarbonCommonConstants.DICTIONARY_INCLUDE).isDefined) {
+        dictIncludeColumns =
+          tableProperties(CarbonCommonConstants.DICTIONARY_INCLUDE).split(",").map(_.trim)
+        localDictColumns.foreach { distCol =>
+          if (dictIncludeColumns.exists(x => x.equalsIgnoreCase(distCol.trim))) {
+            val errormsg = "LOCAL_DICT_INCLUDE/LOCAL_DICT_EXCLUDE column: " + distCol.trim +
+                           " does exist as a DICTIONARY_INCLUDE column. LOCAL_DICT_INCLUDE should" +
+                           " be no dictionary string datatype columns. Please check create table " +
+                           "statement."
+            throw new MalformedCarbonCommandException(errormsg)
+          }
+        }
+      }
+  }
+
+  /**
+   * validate the local dictionary enable property
+   * @param enableLocalDict
+   * @return
+   */
+  private def validateEnableLocalDict(enableLocalDict: String): Boolean = {
+    try {
+      enableLocalDict.trim.toBoolean
+      true
+    } catch {
+      case ex: IllegalArgumentException =>
+        LOGGER
+          .debug(
+            "Invalid value configured to enable local dictionary, considering the default value " +
+            "as true")
+        false
+    }
+  }
+
+  /**
+   * validate the local dictionary threshold property
+   * @param localDictThresholdValue
+   * @return
+   */
+  private def validateLocalDictThresholdValue(localDictThresholdValue: String): Boolean = {
+    try {
+      localDictThresholdValue.trim.toInt
+      true
+    } catch {
+      case ex: NumberFormatException =>
+        LOGGER
+          .debug(
+            "Invalid value configured for local dictionary threshold, considering the default " +
+            "value " +
+            "as 1000")
+        false
+    }
   }
 
   /**
