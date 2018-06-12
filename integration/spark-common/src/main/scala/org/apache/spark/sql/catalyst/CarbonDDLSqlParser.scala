@@ -298,23 +298,31 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
       // considered which is true
       if (!CarbonScalaUtil
         .castStringToBoolean(tableProperties(CarbonCommonConstants.LOCAL_DICT_ENABLE))) {
+        LOGGER
+          .debug(
+            "invalid value is configured for local_dict_enable, considering the defaut value")
         tableProperties.put(CarbonCommonConstants.LOCAL_DICT_ENABLE,
             CarbonCommonConstants.LOCAL_DICT_ENABLE_DEFAULT)
-      }
-      // validate the local dictionary threshold property if defined
-      if (tableProperties.get(CarbonCommonConstants.LOCAL_DICT_THRESHOLD).isDefined) {
-        // if any invalid value is configured for LOCAL_DICT_THRESHOLD, then default value will be
-        // considered which is 1000
-        if (!CarbonScalaUtil.castStringToInt(tableProperties(CarbonCommonConstants
-          .LOCAL_DICT_THRESHOLD))) {
-          tableProperties.put(CarbonCommonConstants.LOCAL_DICT_THRESHOLD,
-              CarbonCommonConstants.LOCALDICT_THRESHOLD_DEFAULT)
-        }
       }
     } else {
       // if LOCAL_DICT_ENABLE is not defined, consider the default value which is true
       tableProperties.put(CarbonCommonConstants.LOCAL_DICT_ENABLE,
           CarbonCommonConstants.LOCAL_DICT_ENABLE_DEFAULT)
+    }
+
+    // validate the local dictionary threshold property if defined
+    if (tableProperties.get(CarbonCommonConstants.LOCAL_DICT_THRESHOLD).isDefined) {
+      // if any invalid value is configured for LOCAL_DICT_THRESHOLD, then default value will be
+      // considered which is 1000
+      if (!CarbonScalaUtil.castStringToInt(tableProperties(CarbonCommonConstants
+        .LOCAL_DICT_THRESHOLD)) ||
+          tableProperties(CarbonCommonConstants.LOCAL_DICT_THRESHOLD).toInt <= 0) {
+        LOGGER
+          .debug(
+            "invalid value is configured for local_dict_threshold, considering the defaut value")
+        tableProperties.put(CarbonCommonConstants.LOCAL_DICT_THRESHOLD,
+          CarbonCommonConstants.LOCALDICT_THRESHOLD_DEFAULT)
+      }
     }
 
     // validate the local dictionary columns defined, this we will validated if the local dictionary
@@ -390,6 +398,15 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
       tableProperties: Map[String, String], localDictColumns: Seq[String]): Unit = {
     var dictIncludeColumns: Seq[String] = Seq[String]()
 
+    // check if the duplicate columns are specified in table schema
+    if (localDictColumns.distinct.lengthCompare(localDictColumns.size) != 0) {
+      val a = localDictColumns.diff(localDictColumns.distinct).distinct
+      val errMsg = "LOCAL_DICT_INCLUDE/LOCAL_DICT_EXCLUDE contains Duplicate Columns " +
+                   a.mkString("(", ",", ")") +
+                   ". Please check create table statement."
+      throw new MalformedCarbonCommandException(errMsg)
+    }
+
       // check if the column specified exists in table schema
       localDictColumns.foreach { distCol =>
         if (!fields.exists(x => x.column.equalsIgnoreCase(distCol.trim))) {
@@ -399,11 +416,13 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
         }
       }
 
-      // check if column is other string datatype
+      // check if column is other than string datatype
       localDictColumns.foreach { dictColm =>
         if (fields
           .exists(x => x.column.equalsIgnoreCase(dictColm) &&
-                       !x.dataType.get.equalsIgnoreCase("STRING"))) {
+                       !x.dataType.get.equalsIgnoreCase("STRING") &&
+                       !x.dataType.get.equalsIgnoreCase("STRUCT") &&
+                       !x.dataType.get.equalsIgnoreCase("ARRAY"))) {
           val errormsg = "LOCAL_DICT_INCLUDE/LOCAL_DICT_EXCLUDE column: " + dictColm.trim +
                          " is not a String datatype column. LOCAL_DICT_COLUMN should be no " +
                          "dictionary string datatype column.Please check create table statement."
@@ -418,8 +437,8 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
         localDictColumns.foreach { distCol =>
           if (dictIncludeColumns.exists(x => x.equalsIgnoreCase(distCol.trim))) {
             val errormsg = "LOCAL_DICT_INCLUDE/LOCAL_DICT_EXCLUDE column: " + distCol.trim +
-                           " does exist as a DICTIONARY_INCLUDE column. LOCAL_DICT_INCLUDE should" +
-                           " be no dictionary string datatype columns. Please check create table " +
+                           " specified in Dictionary include. Local Dictionary will not be" +
+                           " generated for Dictionary include. Please check create table " +
                            "statement."
             throw new MalformedCarbonCommandException(errormsg)
           }
@@ -453,7 +472,15 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
    */
   private def validateLocalDictThresholdValue(localDictThresholdValue: String): Boolean = {
     try {
-      localDictThresholdValue.trim.toInt
+      val a = localDictThresholdValue.trim.toInt
+      if( a <= 0) {
+        LOGGER
+            .debug(
+              "Negative value configured for local dictionary threshold, considering the default " +
+              "value " +
+              "as 1000")
+        return false
+      }
       true
     } catch {
       case ex: NumberFormatException =>
