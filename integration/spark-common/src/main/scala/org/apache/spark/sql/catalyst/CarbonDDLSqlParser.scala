@@ -350,9 +350,11 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
       }
       // validate if both local dictionary include and exclude contains same column
       if (isLocalDictIncludeDefined && isLocalDictExcludeDefined) {
-        if (List(localDictIncludeColumns, localDictExcludeColumns).mkString(",").split(",")
+        val localDictIncludeCols = tableProperties(CarbonCommonConstants.LOCAL_DICT_INCLUDE)
+        val localDictExcludeCols = tableProperties(CarbonCommonConstants.LOCAL_DICT_EXCLUDE)
+        if (List(localDictIncludeCols, localDictExcludeCols).mkString(",").split(",")
               .distinct.length !=
-            List(localDictIncludeColumns, localDictExcludeColumns).mkString(",").split(",")
+            List(localDictIncludeCols, localDictExcludeCols).mkString(",").split(",")
               .length) {
           val errMsg =
             "Column ambiguity as duplicate columns present in LOCAL_DICTIONARY_INCLUDE and " +
