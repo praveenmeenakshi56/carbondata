@@ -131,9 +131,9 @@ This tutorial is going to introduce all commands and data operations on CarbonDa
     2. Filter queries and full scan queries on No-dictionary columns with local dictionary will be faster as filter will be done on encoded data.
     3. Reducing the store size and memory footprint as only unique values will be stored as part of local dictionary and corresponding data will be stored as encoded data.
   
-     By default, Local Dictionary will be enabled and generated for all no-dictionary string/varchar datatype columns.
+    By default, Local Dictionary will be enabled and generated for all no-dictionary string/varchar datatype columns.
          
-     Users will be able to pass following properties in create table command: 
+    Users will be able to pass following properties in create table command: 
          
          | Properties | Default value | Description |
          | ---------- | ------------- | ----------- |
